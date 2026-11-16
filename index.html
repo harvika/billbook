@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BillBook">
+<title>BillBook Expense Bills</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a receipt ledger — date-stamped groups, mono amounts on the right, one bottom tab bar for thumbs. */
+:root{
+  --bg:#f3f4f1;
+  --paper:#ffffff;
+  --ink:#16202b;
+  --muted:#5e6a75;
+  --line:#dfe3df;
+  --accent:#0d6b5c;
+  --accent-ink:#ffffff;
+  --accent-soft:#e1f0ec;
+  --warn:#a35a00;
+  --warn-soft:#fdf0dc;
+  --danger:#b3261e;
+  --display:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --body:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(22,32,43,.06),0 6px 20px rgba(22,32,43,.06);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1418;--paper:#172027;--ink:#e8eef0;--muted:#97a4ad;--line:#26323b;
+    --accent:#3fb59d;--accent-ink:#06231d;--accent-soft:#16332d;--warn:#f0b257;--warn-soft:#3a2a12;--danger:#ff8a80;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1418;--paper:#172027;--ink:#e8eef0;--muted:#97a4ad;--line:#26323b;
+  --accent:#3fb59d;--accent-ink:#06231d;--accent-soft:#16332d;--warn:#f0b257;--warn-soft:#3a2a12;--danger:#ff8a80;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.app{max-width:880px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 14px) max(16px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 150px) max(16px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:14px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:34px;height:34px;border-radius:9px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-weight:800;font-size:15px;letter-spacing:-.5px}
+.brand h1{font-family:var(--display);font-size:20px;font-weight:800;margin:0;letter-spacing:-.3px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:10px 14px;font-size:13.5px;font-weight:500}
+.monthbar{display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:6px;box-shadow:var(--shadow)}
+.iconbtn{width:42px;height:42px;border-radius:10px;border:0;background:transparent;display:grid;place-items:center;font-size:20px;color:var(--ink)}
+.iconbtn:hover{background:var(--accent-soft)}
+.monthbar .label{flex:1;text-align:center;position:relative}
+.monthbar .label strong{font-family:var(--display);font-size:17px;font-weight:800}
+.monthbar input[type=month]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.tile{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.tile .k{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.tile .v{font-family:var(--mono);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .v small{font-size:12px;color:var(--muted);font-weight:500;margin-right:3px}
+.tile.main{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tile.main .k{color:inherit;opacity:.8}
+.tile.check .v{color:var(--warn)}
+@media (max-width:620px){.tiles{grid-template-columns:1fr 1fr}}
+.tools{display:flex;gap:8px;align-items:center}
+.search{flex:1;min-width:0;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--paper);padding:0 14px;font-size:16px}
+.btn{height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--paper);font-weight:700;font-size:14.5px;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--danger)}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn:disabled{opacity:.5;cursor:default}
+.jobs{display:flex;flex-direction:column;gap:8px}
+.job{background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;font-size:14px}
+.job.err{border-left-color:var(--danger)}
+.job .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.job .st{color:var(--muted);font-size:13px;white-space:nowrap}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:sp 0.8s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.day{display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.dayhead{display:flex;justify-content:space-between;align-items:baseline;padding:10px 14px;background:color-mix(in srgb,var(--accent-soft) 55%,var(--paper));border-bottom:1px dashed var(--line)}
+.dayhead .d{font-weight:800;font-family:var(--display)}
+.dayhead .d span{color:var(--muted);font-weight:600;margin-left:6px;font-size:13px}
+.dayhead .t{font-family:var(--mono);font-weight:600;font-size:14px}
+.row{display:flex;align-items:center;gap:12px;padding:10px 14px;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;width:100%}
+.row:last-child{border-bottom:0}
+.row:hover{background:color-mix(in srgb,var(--accent-soft) 40%,transparent)}
+.thumb{width:46px;height:56px;border-radius:7px;object-fit:cover;background:var(--bg);border:1px solid var(--line);flex:none}
+.thumb.ph{display:grid;place-items:center;color:var(--muted);font-size:11px;font-weight:700}
+.row .mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.row .v{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--muted)}
+.chip{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--muted)}
+.chip.warn{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.row .amt{text-align:right;font-family:var(--mono);font-weight:600;white-space:nowrap}
+.row .amt small{display:block;color:var(--muted);font-weight:400;font-size:11.5px}
+.empty{background:var(--paper);border:1px dashed var(--line);border-radius:var(--radius);padding:28px 20px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:10px;align-items:center}
+.empty strong{color:var(--ink);font-size:16px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:12px}
+.card h2{margin:0;font-family:var(--display);font-size:16px;font-weight:800}
+.card p{margin:0;color:var(--muted);font-size:14px}
+.bars{display:flex;flex-direction:column;gap:8px}
+.bar{display:grid;grid-template-columns:minmax(90px,150px) 1fr auto;gap:10px;align-items:center;font-size:13.5px}
+.bar .track{height:10px;border-radius:6px;background:var(--bg);overflow:hidden}
+.bar .fill{height:100%;background:var(--accent);border-radius:6px}
+.bar .n{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+.bar .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.mini{width:100%;border-collapse:collapse;font-size:13.5px}
+table.mini th{text-align:left;color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:6px 8px;border-bottom:1px solid var(--line)}
+table.mini td{padding:7px 8px;white-space:nowrap;border-bottom:1px solid var(--line)}
+table.mini td.r,table.mini th.r{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+table.mini tfoot td{font-weight:800;border-bottom:0}
+.tablewrap{overflow-x:auto}
+.exportrow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.exportrow .btn{height:52px;font-size:15.5px}
+.check{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
+.check input{width:22px;height:22px;accent-color:var(--accent)}
+.fab{position:fixed;right:max(18px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom) + 82px);z-index:20;height:56px;padding:0 22px;border-radius:999px;border:0;background:var(--accent);color:var(--accent-ink);font-weight:800;font-size:16px;box-shadow:0 8px 24px rgba(13,107,92,.35);display:flex;align-items:center;gap:8px}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:15;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:6px max(10px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 6px) max(10px,env(safe-area-inset-left));display:flex;justify-content:center}
+.tabbar .inner{display:grid;grid-template-columns:repeat(3,1fr);max-width:520px;width:100%}
+.tab{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:var(--muted);font-weight:700;font-size:12px}
+.tab svg{width:24px;height:24px}
+.tab[aria-current="page"]{color:var(--accent)}
+.overlay{position:fixed;inset:0;z-index:40;background:rgba(10,16,20,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--paper);width:100%;max-width:640px;max-height:94%;overflow:auto;-webkit-overflow-scrolling:touch;border-radius:20px 20px 0 0;padding:16px max(16px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 18px) max(16px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:14px}
+@media (min-width:700px){.overlay{align-items:center}.sheet{border-radius:20px;max-height:90%}}
+.sheet .sh{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sheet h3{margin:0;font-family:var(--display);font-size:18px;font-weight:800}
+.preview{display:flex;gap:10px;align-items:flex-start}
+.preview img{max-width:100%;max-height:300px;border-radius:10px;border:1px solid var(--line);background:var(--bg);object-fit:contain}
+.preview a{font-size:13px;font-weight:700;color:var(--accent)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.form .full{grid-column:1/-1}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.field input,.field select,.field textarea{height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font-size:16px;width:100%;min-width:0}
+.field textarea{height:72px;padding:10px 12px;resize:vertical}
+.field input.num{font-family:var(--mono)}
+.sheet .actions{display:flex;gap:10px;flex-wrap:wrap}
+.sheet .actions .btn{flex:1}
+.note{font-size:13px;color:var(--muted)}
+.note.warn{color:var(--warn);font-weight:600}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 150px);z-index:60;background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
+.addsheet .bigbtn{display:flex;align-items:center;gap:14px;padding:16px;border-radius:14px;border:1px solid var(--line);background:var(--bg);text-align:left;width:100%}
+.addsheet .bigbtn strong{display:block;font-size:16px}
+.addsheet .bigbtn span{color:var(--muted);font-size:13.5px}
+.addsheet .bigbtn .ic{width:44px;height:44px;border-radius:12px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
+.pastebox{border:2px dashed var(--accent);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--accent-soft)}
+.pastebox strong{font-size:16px}
+.pastebox span{color:var(--muted);font-size:13.5px}
+.pastezone{min-height:52px;border-radius:10px;background:var(--paper);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);font-weight:700;font-size:15px;-webkit-user-select:text;user-select:text;caret-color:transparent;padding:8px;text-align:center}
+.pastezone:focus{border-color:var(--accent);color:var(--accent)}
+ol.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+ol.steps b{font-weight:800}
+.linkbox{display:flex;gap:8px}
+.linkbox input{flex:1;min-width:0;height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font-size:14px;font-family:var(--mono)}
+.drop{outline:3px dashed var(--accent);outline-offset:-10px}
+.hidden{display:none !important}
+.sectionhead{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sectionhead h2{margin:0;font-family:var(--display);font-size:17px;font-weight:800}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand"><div class="logo">BB</div><h1>BillBook</h1></div>
+    <span id="syncPill" class="pill"><span class="dot"></span><span id="syncText">Connecting…</span></span>
+  </header>
+  <div id="banners"></div>
+  <div class="monthbar">
+    <button class="iconbtn" id="prevM" aria-label="Previous month">‹</button>
+    <div class="label"><strong id="monthLabel">—</strong><input type="month" id="monthPick" aria-label="Pick month"></div>
+    <button class="iconbtn" id="nextM" aria-label="Next month">›</button>
+  </div>
+  <div class="tiles" id="tiles"></div>
+  <div class="jobs" id="jobs"></div>
+  <main id="view"></main>
+</div>
+
+<button class="fab" id="fab" aria-label="Add bills">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  Add bills
+</button>
+
+<nav class="tabbar" aria-label="Sections"><div class="inner">
+  <button class="tab" data-view="bills" aria-current="page">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>Bills</button>
+  <button class="tab" data-view="report">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Monthly report</button>
+  <button class="tab" data-view="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+</div></nav>
+
+<input type="file" id="fileCam" accept="image/*" capture="environment" class="hidden">
+<input type="file" id="fileAny" accept="image/*,application/pdf,.pdf" multiple class="hidden">
+<div id="modalRoot"></div>
+
+<script>
+"use strict";
+/* ---------- constants ---------- */
+const DEFAULT_CATS = ["Fuel","Food & Meals","Travel & Transport","Accommodation","Office Supplies","Raw Materials","Packaging","Utilities","Telecom & Internet","Vehicle Maintenance","Courier & Shipping","Government Fees","Repairs & Maintenance","Others"];
+const DEFAULTS = { kind:"settings", name:"", company:"", currency:"AED", categories:DEFAULT_CATS, attachCopies:true, newestFirst:true };
+const LIBS = {
+  pdf: ["https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js","https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"],
+  xlsx: ["https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"],
+  jspdf: ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"]
+};
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+/* ---------- state ---------- */
+const state = {
+  bills: new Map(), settings: {...DEFAULTS}, month: ymOf(new Date()), view: "bills",
+  query: "", mode: "loading", jobs: [], aiOK: null, imgMax: 0, syncNote: ""
+};
+let db = null, col = null, uid = null, assets = null, sample = null, downloads = null;
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function pad(n){ return String(n).padStart(2,"0"); }
+function ymOf(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1); }
+function todayISO(){ const d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function monthName(ym){ const [y,m]=ym.split("-").map(Number); return MONTHS[m-1]+" "+y; }
+function shiftMonth(ym,k){ const [y,m]=ym.split("-").map(Number); const d=new Date(y,m-1+k,1); return ymOf(d); }
+function dParts(iso){ const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d); }
+function xlDate(iso){ const [y,m,d]=iso.split("-").map(Number); return {t:"n",v:(Date.UTC(y,m-1,d)-Date.UTC(1899,11,30))/86400000,z:"dd-mmm-yyyy"}; }
+function fmtDay(iso){ const d=dParts(iso); return pad(d.getDate())+" "+MONTHS[d.getMonth()].slice(0,3)+" "+d.getFullYear(); }
+function money(n){ const v=Number(n)||0; return v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function num(v){ if(v===null||v===undefined||v==="") return null; const n=typeof v==="number"?v:parseFloat(String(v).replace(/[^0-9.\-]/g,"")); return isFinite(n)?Math.round(n*100)/100:null; }
+function newId(){ return "b_"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function validISO(s){ return typeof s==="string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(dParts(s)); }
+function billDate(b){ return validISO(b.date) ? b.date : (b.createdAt||todayISO()).slice(0,10); }
+function cur(b){ return (b.currency||state.settings.currency||"AED").toUpperCase(); }
+function base(){ return (state.settings.currency||"AED").toUpperCase(); }
+function toast(msg,ms=2600){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),ms); }
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=()=>rej(new Error("Could not load a helper library. Check the internet connection and try again.")); document.head.appendChild(s); }); }
+const libCache={};
+function need(name){ if(!libCache[name]) libCache[name]=(async()=>{ for(const s of LIBS[name]) await loadScript(s); })().catch(e=>{ delete libCache[name]; throw e; }); return libCache[name]; }
+function blobToDataURL(b){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(b); }); }
+async function dataURLToBlob(u){ return await (await fetch(u)).blob(); }
+function loadImg(src){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error("This image could not be opened. Try a JPG or PNG.")); i.src=src; }); }
+function canvasBlob(c,q=.85){ return new Promise(res=>c.toBlob(b=>res(b),"image/jpeg",q)); }
+async function imageToJpeg(src, maxSide, q){
+  const img = await loadImg(src);
+  const s = Math.min(1, maxSide/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*s); c.height=Math.round(img.naturalHeight*s);
+  const x=c.getContext("2d"); x.fillStyle="#fff"; x.fillRect(0,0,c.width,c.height); x.drawImage(img,0,0,c.width,c.height);
+  return await canvasBlob(c,q);
+}
+async function blobToJpeg(blob,maxSide,q){ const u=URL.createObjectURL(blob); try{ return await imageToJpeg(u,maxSide,q); } finally { URL.revokeObjectURL(u); } }
+
+/* ---------- local fallback storage (IndexedDB) ---------- */
+const IDB = {
+  db:null,
+  open(){ return new Promise((res,rej)=>{ const r=indexedDB.open("billbook",1); r.onupgradeneeded=()=>{ r.result.createObjectStore("docs"); }; r.onsuccess=()=>{ this.db=r.result; res(); }; r.onerror=()=>rej(r.error); }); },
+  all(){ return new Promise((res,rej)=>{ const out=[]; const t=this.db.transaction("docs").objectStore("docs").openCursor(); t.onsuccess=()=>{ const c=t.result; if(c){ out.push([c.key,c.value]); c.continue(); } else res(out); }; t.onerror=()=>rej(t.error); }); },
+  put(k,v){ return new Promise((res,rej)=>{ const t=this.db.transaction("docs","readwrite"); t.objectStore("docs").put(v,k); t.oncomplete=res; t.onerror=()=>rej(t.error); }); },
+  del(k){ return new Promise((res,rej)=>{ const t=this.db.transaction("docs","readwrite"); t.objectStore("docs").delete(k); t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
+};
+
+/* ---------- store ---------- */
+const Store = {
+  async saveBill(b){
+    b.updatedAt=new Date().toISOString();
+    if(state.mode==="cloud"){ const body={...b}; delete body.id; await col.doc(b.id).set(body); }
+    else { await IDB.put(b.id,b).catch(()=>{}); state.bills.set(b.id,b); render(); }
+  },
+  async deleteBill(b){
+    const shared=[...state.bills.values()].some(o=>o.id!==b.id && (o.fileId&&o.fileId===b.fileId || o.previewId&&o.previewId===b.previewId));
+    if(state.mode==="cloud"){
+      await col.doc(b.id).delete();
+      if(assets && !shared){ for(const id of new Set([b.fileId,b.previewId].filter(Boolean))) assets.delete(id).catch(()=>{}); }
+    } else { await IDB.del(b.id).catch(()=>{}); state.bills.delete(b.id); render(); }
+  },
+  async saveSettings(s){
+    state.settings={...s};
+    if(state.mode==="cloud"){ await col.doc("settings").set({...s,kind:"settings"}); }
+    else { await IDB.put("settings",{...s,kind:"settings"}).catch(()=>{}); render(); }
+  },
+  previewSrc(b){ if(b.previewId) return "/_blob/"+b.previewId; return b.previewData||""; },
+  fileSrc(b){ if(b.fileId) return "/_blob/"+b.fileId; return this.previewSrc(b); }
+};
+
+async function initLocal(){
+  try{ await IDB.open(); const rows=await IDB.all(); for(const [k,v] of rows){ if(k==="settings") state.settings={...DEFAULTS,...v}; else if(v&&v.kind==="bill") state.bills.set(k,v); } }catch(e){}
+  state.mode="local"; render();
+}
+function initCloud(){
+  col=db.collection("data/users/"+uid);
+  const timer=setTimeout(()=>{ state.syncNote="Your bills are taking a while to load. Check the connection; they will appear by themselves."; render(); },10000);
+  col.onSnapshot(snap=>{
+    if(!snap.metadata.fromCache){ clearTimeout(timer); state.syncNote=""; }
+    const m=new Map();
+    for(const d of snap.docs){ const v=d.data(); if(!v) continue; if(d.id==="settings") state.settings={...DEFAULTS,...v}; else if(v.kind==="bill") m.set(d.id,{...v,id:d.id}); }
+    state.bills=m; state.mode="cloud"; render();
+  }, err=>{ clearTimeout(timer); state.syncNote="Sync stopped ("+err.code+"). Reload the page to reconnect."; render(); });
+}
+
+async function boot(){
+  render();
+  if(!window.claude || typeof window.claude.use!=="function"){ state.aiOK=false; await initLocal(); return; }
+  const get=n=>window.claude.use(n).catch(()=>null);
+  const [dbx,userx,asx,smx,dlx]=await Promise.all(["db","user","assets","sample","downloads"].map(get));
+  sample=smx; downloads=dlx; assets=asx;
+  state.aiOK=!!sample;
+  if(sample){ try{ const lim=await sample.limits(); state.imgMax=lim?.images?.maxCount||0; }catch(e){ state.imgMax=0; } }
+  if(dbx&&userx){ try{ uid=await userx.id(); }catch(e){ uid=null; } }
+  if(dbx&&uid){ db=dbx; initCloud(); } else { await initLocal(); }
+}
+
+/* ---------- derived data ---------- */
+function billsOfMonth(ym){ return [...state.bills.values()].filter(b=>billDate(b).startsWith(ym)); }
+function sortBills(arr,newestFirst){ return arr.slice().sort((a,b)=>{ const d=billDate(a).localeCompare(billDate(b)); if(d) return newestFirst?-d:d; return (a.createdAt||"").localeCompare(b.createdAt||"")*(newestFirst?-1:1); }); }
+function totals(arr){
+  const byCur={}; let vat=0, sub=0, check=0;
+  for(const b of arr){ const c=cur(b); byCur[c]=(byCur[c]||0)+(Number(b.total)||0); if(c===base()){ vat+=Number(b.vat)||0; sub+=Number(b.subtotal)||(Number(b.total)||0)-(Number(b.vat)||0); } if(b.needsReview) check++; }
+  return { total: byCur[base()]||0, vat, sub, count: arr.length, check, others: Object.entries(byCur).filter(([c])=>c!==base()) };
+}
+function byCategory(arr){ const m={}; for(const b of arr){ if(cur(b)!==base()) continue; const k=b.category||"Others"; m[k]=m[k]||{n:0,t:0}; m[k].n++; m[k].t+=Number(b.total)||0; } return Object.entries(m).sort((a,b)=>b[1].t-a[1].t); }
+function byDay(arr){ const m={}; for(const b of arr){ const d=billDate(b); m[d]=m[d]||{n:0,sub:0,vat:0,t:0}; m[d].n++; if(cur(b)===base()){ m[d].t+=Number(b.total)||0; m[d].vat+=Number(b.vat)||0; m[d].sub+=Number(b.subtotal)||((Number(b.total)||0)-(Number(b.vat)||0)); } } return Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0])); }
+
+/* ---------- render ---------- */
+function render(){
+  // sync pill
+  const pill=$("#syncPill"), st=$("#syncText");
+  pill.classList.toggle("warn", state.mode==="local");
+  st.textContent = state.mode==="cloud" ? "Synced" : state.mode==="local" ? "This device only" : "Connecting…";
+  // banners
+  const bn=[];
+  if(state.syncNote) bn.push(state.syncNote);
+  if(state.mode==="local") bn.push("Bills are saved in this browser only. Open BillBook from your Claude account to keep them in sync across iPhone and iPad.");
+  if(state.aiOK===false) bn.push("Automatic bill reading is off here. You can still add bills and type the details.");
+  $("#banners").innerHTML = bn.map(t=>`<div class="banner">${esc(t)}</div>`).join("");
+  // month
+  $("#monthLabel").textContent=monthName(state.month); $("#monthPick").value=state.month;
+  // tiles
+  const mb=billsOfMonth(state.month), T=totals(mb);
+  $("#tiles").innerHTML = `
+    <div class="tile main"><span class="k">Month total</span><span class="v"><small>${esc(base())}</small>${money(T.total)}</span></div>
+    <div class="tile"><span class="k">VAT</span><span class="v"><small>${esc(base())}</small>${money(T.vat)}</span></div>
+    <div class="tile"><span class="k">Bills</span><span class="v">${T.count}</span></div>
+    <div class="tile ${T.check?"check":""}"><span class="k">To check</span><span class="v">${T.check}</span></div>`;
+  // jobs
+  $("#jobs").innerHTML = state.jobs.map(j=>`<div class="job ${j.error?"err":""}">${j.done||j.error?"":'<span class="spin" aria-hidden="true"></span>'}<span class="name">${esc(j.name)}</span><span class="st">${esc(j.status)}</span>${j.error?`<button class="btn ghost" data-dismiss="${j.id}">Dismiss</button>`:""}</div>`).join("");
+  // tabs
+  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-current", t.dataset.view===state.view?"page":"false"));
+  $("#fab").classList.toggle("hidden", state.view==="settings");
+  const v=$("#view");
+  if(state.view==="bills") v.innerHTML=renderBills(mb);
+  else if(state.view==="report") v.innerHTML=renderReport(mb);
+  else v.innerHTML=renderSettings();
+}
+
+function renderBills(mb){
+  const q=state.query.trim().toLowerCase();
+  let arr=mb; if(q) arr=arr.filter(b=>[b.vendor,b.billNo,b.category,b.description,b.trn,b.notes,String(b.total)].join(" ").toLowerCase().includes(q));
+  const sorted=sortBills(arr,state.settings.newestFirst!==false);
+  const groups=[]; for(const b of sorted){ const d=billDate(b); let g=groups[groups.length-1]; if(!g||g.d!==d){ g={d,items:[]}; groups.push(g);} g.items.push(b); }
+  const tools=`<div class="tools"><input class="search" id="search" type="search" placeholder="Search vendor, bill no, category…" value="${esc(state.query)}" aria-label="Search bills"><button class="btn" id="sortBtn" aria-label="Change sort order">${state.settings.newestFirst!==false?"Newest first":"Oldest first"}</button></div>`;
+  if(state.mode==="loading") return tools+`<div class="empty"><span class="spin"></span>Loading your bills…</div>`;
+  if(!mb.length) return tools+`<div class="empty"><strong>No bills for ${esc(monthName(state.month))}</strong>Snap a photo of a receipt or pick PDFs. BillBook reads the date, vendor, VAT and total, then files each bill under its date.<button class="btn primary" data-open-add>Add bills</button></div>`;
+  if(!groups.length) return tools+`<div class="empty">No bills match “${esc(state.query)}”.</div>`;
+  return tools+`<div style="display:flex;flex-direction:column;gap:12px">`+groups.map(g=>{
+    const dt=g.items.filter(b=>cur(b)===base()).reduce((s,b)=>s+(Number(b.total)||0),0);
+    const dd=dParts(g.d);
+    return `<section class="day"><div class="dayhead"><span class="d">${esc(fmtDay(g.d))}<span>${DOW[dd.getDay()]} · ${g.items.length} bill${g.items.length>1?"s":""}</span></span><span class="t">${money(dt)}</span></div>`+
+      g.items.map(b=>`<button class="row" data-bill="${esc(b.id)}">${b.thumb?`<img class="thumb" alt="" src="${esc(b.thumb)}">`:`<span class="thumb ph">${b.fileType==="pdf"?"PDF":"—"}</span>`}
+        <span class="mid"><span class="v">${esc(b.vendor||"Unnamed bill")}</span>
+        <span class="meta"><span class="chip">${esc(b.category||"Others")}</span>${b.billNo?`<span>#${esc(b.billNo)}</span>`:""}${b.needsReview?`<span class="chip warn">Check</span>`:""}${!validISO(b.date)?`<span class="chip warn">No date</span>`:""}</span></span>
+        <span class="amt">${money(b.total)}<small>${esc(cur(b))}${b.vat?" · VAT "+money(b.vat):""}</small></span></button>`).join("")+`</section>`;
+  }).join("")+`</div>`;
+}
+
+function renderReport(mb){
+  const T=totals(mb), cats=byCategory(mb), days=byDay(mb), max=cats.length?cats[0][1].t:1;
+  const others=T.others.length?`<p>Also in other currencies: ${T.others.map(([c,v])=>esc(c)+" "+money(v)).join(", ")}. These are listed in the files but not added to the ${esc(base())} totals.</p>`:"";
+  return `<div style="display:flex;flex-direction:column;gap:12px">
+  <section class="card"><div class="sectionhead"><h2>${esc(monthName(state.month))} report</h2><span class="pill">${T.count} bills</span></div>
+    <p>Bills are sorted by date. Download the month as Excel for accounts, or as PDF to print or email.</p>
+    ${T.check?`<p class="note warn">${T.check} bill${T.check>1?"s need":" needs"} a quick check before you send the report. Open them from the Bills tab.</p>`:""}
+    ${others}
+    <label class="check"><input type="checkbox" id="attachCopies" ${state.settings.attachCopies!==false?"checked":""}> Add bill copies at the end of the PDF</label>
+    <div class="exportrow"><button class="btn primary" id="xlsxBtn" ${T.count?"":"disabled"}>Excel (.xlsx)</button><button class="btn primary" id="pdfBtn" ${T.count?"":"disabled"}>PDF</button></div>
+  </section>
+  <section class="card"><h2>By category</h2>${cats.length?`<div class="bars">${cats.map(([k,v])=>`<div class="bar"><span class="lbl">${esc(k)}</span><span class="track"><span class="fill" style="width:${Math.max(2,v.t/max*100).toFixed(1)}%;display:block"></span></span><span class="n">${money(v.t)}</span></div>`).join("")}</div>`:`<p>No bills yet this month.</p>`}</section>
+  <section class="card"><h2>Day by day</h2>${days.length?`<div class="tablewrap"><table class="mini"><thead><tr><th>Date</th><th class="r">Bills</th><th class="r">Before VAT</th><th class="r">VAT</th><th class="r">Total</th></tr></thead><tbody>${days.map(([d,v])=>`<tr><td>${esc(fmtDay(d).slice(0,6))} <span style="color:var(--muted)">${DOW[dParts(d).getDay()]}</span></td><td class="r">${v.n}</td><td class="r">${money(v.sub)}</td><td class="r">${money(v.vat)}</td><td class="r">${money(v.t)}</td></tr>`).join("")}</tbody><tfoot><tr><td>Total</td><td class="r">${T.count}</td><td class="r">${money(T.sub)}</td><td class="r">${money(T.vat)}</td><td class="r">${money(T.total)}</td></tr></tfoot></table></div>`:`<p>No bills yet this month.</p>`}</section>
+  </div>`;
+}
+
+function renderSettings(){
+  const s=state.settings;
+  return `<section class="card"><h2>Report details</h2><p>These appear at the top of your Excel and PDF reports.</p>
+  <div class="form">
+    <div class="field"><label for="sName">Your name</label><input id="sName" value="${esc(s.name)}" placeholder="Name on the report"></div>
+    <div class="field"><label for="sCompany">Company</label><input id="sCompany" value="${esc(s.company)}" placeholder="Company or department"></div>
+    <div class="field"><label for="sCur">Main currency</label><input id="sCur" value="${esc(s.currency)}" maxlength="3" style="text-transform:uppercase"></div>
+    <div class="field full"><label for="sCats">Categories (one per line)</label><textarea id="sCats" style="height:180px">${esc((s.categories||DEFAULT_CATS).join("\n"))}</textarea></div>
+  </div>
+  <div class="actions"><button class="btn primary" id="saveSettings">Save settings</button></div>
+  </section>
+  <section class="card" id="share-setup"><h2>Share bills from WhatsApp or Photos</h2>
+  <p>iPhone only lists installed apps in the Share menu, so BillBook uses a small Shortcut instead. Set it up once (about 2 minutes).</p>
+  <ol class="steps">
+    <li>Open the <b>Files</b> app → iCloud Drive → <b>Shortcuts</b> folder and create a folder named <b>BillBook Inbox</b>.</li>
+    <li>Open the <b>Shortcuts</b> app, tap <b>+</b>, and name the shortcut <b>Send to BillBook</b>.</li>
+    <li>Tap the <b>ⓘ</b> (details) button and turn on <b>Show in Share Sheet</b>. Set it to receive <b>Images</b> and <b>PDFs</b>.</li>
+    <li>Add the action <b>Save File</b>. Turn off <b>Ask Where to Save</b> and set the folder to <b>BillBook Inbox</b>.</li>
+    <li>Add the action <b>Open URLs</b> and paste the BillBook link below.</li>
+  </ol>
+  <div class="linkbox"><input id="appLink" readonly value="https://claude.ai/artifact/CNQFdxnM6c4QsiFkneDDeo#add" aria-label="BillBook link"><button class="btn" id="copyLink">Copy link</button></div>
+  <p><b>Every day:</b> in WhatsApp, open the bill (or select several) → Share → <b>Send to BillBook</b>. BillBook opens on Add bills. Tap <b>Choose photos or PDFs</b> → Browse → <b>BillBook Inbox</b> → Select all. Bills already added are skipped, so you can clear the folder whenever you like.</p>
+  </section>
+  <section class="card"><h2>On iPhone and iPad</h2><p>Open this page in Safari, tap Share, then “Add to Home Screen” to launch BillBook like an app. Bills you add on one device appear on the other when you are signed in to the same Claude account.</p></section>`;
+}
+
+/* ---------- modal ---------- */
+function openModal(html, cls=""){
+  const root=$("#modalRoot");
+  root.innerHTML=`<div class="overlay" id="overlay"><div class="sheet ${cls}" role="dialog" aria-modal="true">${html}</div></div>`;
+  document.body.style.overflow="hidden";
+  $("#overlay").addEventListener("click",e=>{ if(e.target.id==="overlay") closeModal(); });
+  const f=root.querySelector("input,button,select,textarea"); if(f&&window.innerWidth>700) f.focus();
+}
+function closeModal(){ $("#modalRoot").innerHTML=""; document.body.style.overflow=""; }
+function confirmBox(title,text,okLabel){
+  return new Promise(res=>{
+    openModal(`<div class="sh"><h3>${esc(title)}</h3></div><p class="note">${esc(text)}</p><div class="actions"><button class="btn" id="cNo">Cancel</button><button class="btn primary" id="cYes" style="background:var(--danger);border-color:var(--danger)">${esc(okLabel)}</button></div>`);
+    $("#cNo").onclick=()=>{ closeModal(); res(false); }; $("#cYes").onclick=()=>{ closeModal(); res(true); };
+  });
+}
+
+function openAdd(){
+  openModal(`<div class="sh"><h3>Add bills</h3><button class="iconbtn" id="xAdd" aria-label="Close">✕</button></div>
+  <button class="bigbtn" id="addCam"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><span><strong>Take a photo</strong><span>Point the camera at the bill</span></span></button>
+  <button class="bigbtn" id="addFiles"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg></span><span><strong>Choose photos or PDFs</strong><span>Pick many at once from Photos or Files</span></span></button>
+  <div class="pastebox"><strong>Paste a bill from WhatsApp</strong><span>In WhatsApp or Photos, open the bill, tap Share → Copy. Then tap the box below and choose Paste.</span>
+    <div class="pastezone" id="pasteZone" contenteditable="true" role="textbox" aria-label="Paste a copied bill here" inputmode="none">Tap here, then Paste</div></div>
+  <button class="bigbtn" id="addManual"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></span><span><strong>Type a bill by hand</strong><span>For bills without a copy</span></span></button>
+  <p class="note">Each bill is read automatically and filed under the date printed on it, so you can add bills any day.</p>`,"addsheet");
+  $("#xAdd").onclick=closeModal;
+  $("#addCam").onclick=()=>{ closeModal(); $("#fileCam").click(); };
+  $("#addFiles").onclick=()=>{ closeModal(); $("#fileAny").click(); };
+  $("#addManual").onclick=()=>{ closeModal(); openBill(blankBill()); };
+  const pz=$("#pasteZone"); pz.addEventListener("focus",()=>{ pz.textContent="Now tap again and choose Paste"; }); pz.addEventListener("blur",()=>{ pz.textContent="Tap here, then Paste"; });
+  pz.addEventListener("beforeinput",e=>{ if(e.inputType!=="insertFromPaste") e.preventDefault(); });
+}
+
+function blankBill(){ return { kind:"bill", id:newId(), date:todayISO(), vendor:"", billNo:"", trn:"", category:"Others", description:"", payment:"Card", subtotal:null, vat:null, total:null, currency:base(), notes:"", source:"manual", createdAt:new Date().toISOString(), needsReview:false, isNew:true }; }
+
+function openBill(b){
+  const cats=state.settings.categories||DEFAULT_CATS; const catList=cats.includes(b.category)?cats:[...cats,b.category||"Others"];
+  const src=Store.previewSrc(b), fsrc=Store.fileSrc(b);
+  openModal(`<div class="sh"><h3>${b.isNew?"New bill":"Bill details"}</h3><button class="iconbtn" id="xBill" aria-label="Close">✕</button></div>
+  ${src?`<div class="preview"><div style="display:flex;flex-direction:column;gap:6px"><img alt="Bill copy" src="${esc(src)}"><a href="${esc(fsrc)}" target="_blank" rel="noopener">Open full ${b.fileType==="pdf"?"PDF":"image"}</a></div></div>`:""}
+  ${b.needsReview?`<p class="note warn">${esc(b.reviewReason||"Please check these details against the bill.")}</p>`:""}
+  <div class="form">
+    <div class="field"><label for="fDate">Bill date</label><input id="fDate" type="date" value="${esc(validISO(b.date)?b.date:"")}"></div>
+    <div class="field"><label for="fCat">Category</label><select id="fCat">${catList.map(c=>`<option ${c===b.category?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
+    <div class="field full"><label for="fVendor">Vendor / shop</label><input id="fVendor" value="${esc(b.vendor)}" placeholder="e.g. ENOC Al Jurf"></div>
+    <div class="field"><label for="fNo">Bill / invoice no.</label><input id="fNo" value="${esc(b.billNo)}"></div>
+    <div class="field"><label for="fTrn">Vendor TRN</label><input id="fTrn" value="${esc(b.trn)}" inputmode="numeric"></div>
+    <div class="field"><label for="fSub">Amount before VAT</label><input id="fSub" class="num" inputmode="decimal" value="${b.subtotal??""}"></div>
+    <div class="field"><label for="fVat">VAT</label><input id="fVat" class="num" inputmode="decimal" value="${b.vat??""}"></div>
+    <div class="field"><label for="fTotal">Total paid</label><input id="fTotal" class="num" inputmode="decimal" value="${b.total??""}"></div>
+    <div class="field"><label for="fCur">Currency</label><input id="fCur" value="${esc(cur(b))}" maxlength="3" style="text-transform:uppercase"></div>
+    <div class="field"><label for="fPay">Paid by</label><select id="fPay">${["Cash","Card","Bank transfer","Credit","Unknown"].map(p=>`<option ${p===b.payment?"selected":""}>${p}</option>`).join("")}</select></div>
+    <div class="field full"><label for="fDesc">What was bought</label><input id="fDesc" value="${esc(b.description)}"></div>
+    <div class="field full"><label for="fNotes">Notes</label><textarea id="fNotes">${esc(b.notes)}</textarea></div>
+  </div>
+  <div class="actions"><button class="btn primary" id="bSave">Save bill</button>${!b.isNew&&src&&sample?`<button class="btn" id="bReread">Read again</button>`:""}${!b.isNew?`<button class="btn danger" id="bDel">Delete</button>`:""}</div>`);
+  $("#xBill").onclick=closeModal;
+  $("#fSub").addEventListener("change",()=>{ const s=num($("#fSub").value), v=num($("#fVat").value); if(s!=null && !$("#fTotal").value) $("#fTotal").value=(s+(v||0)).toFixed(2); });
+  $("#bSave").onclick=async()=>{
+    const nb={...b, date:$("#fDate").value||null, category:$("#fCat").value, vendor:$("#fVendor").value.trim(), billNo:$("#fNo").value.trim(), trn:$("#fTrn").value.trim(),
+      subtotal:num($("#fSub").value), vat:num($("#fVat").value), total:num($("#fTotal").value), currency:($("#fCur").value||base()).toUpperCase().slice(0,3), payment:$("#fPay").value,
+      description:$("#fDesc").value.trim(), notes:$("#fNotes").value.trim()};
+    if(nb.total==null && nb.subtotal!=null) nb.total=Math.round((nb.subtotal+(nb.vat||0))*100)/100;
+    nb.needsReview=!validISO(nb.date)||nb.total==null; nb.reviewReason=nb.needsReview?"Add the bill date and total.":"";
+    delete nb.isNew;
+    $("#bSave").disabled=true;
+    try{ await Store.saveBill(nb); closeModal(); if(validISO(nb.date)) state.month=nb.date.slice(0,7); render(); toast("Bill saved"); }
+    catch(e){ $("#bSave").disabled=false; toast(dbMsg(e)); }
+  };
+  const rr=$("#bReread"); if(rr) rr.onclick=()=>rereadBill(b);
+  const del=$("#bDel"); if(del) del.onclick=async()=>{ const ok=await confirmBox("Delete this bill?",`${b.vendor||"This bill"} · ${cur(b)} ${money(b.total)} will be removed with its copy. This can't be undone.`,"Delete bill"); if(!ok){ openBill(b); return; } try{ await Store.deleteBill(b); toast("Bill deleted"); }catch(e){ toast(dbMsg(e)); } };
+}
+function dbMsg(e){ if(e&&e.code==="quota_exceeded") return "Storage is full. Delete old bills to add new ones."; if(e&&e.code==="invalid_argument") return "Couldn't save: you don't have permission to change this BillBook."; return "Couldn't save right now. Please try again."; }
+
+/* ---------- file processing ---------- */
+async function renderPdf(file, maxPages){
+  await need("pdf");
+  const lib=window.pdfjsLib; if(!lib) throw new Error("PDF reader didn't load.");
+  try{ lib.GlobalWorkerOptions.workerSrc=LIBS.pdf[1]; }catch(e){}
+  const pdf=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer()), isEvalSupported:false}).promise;
+  const images=[]; let text="";
+  for(let i=1;i<=Math.min(pdf.numPages,8);i++){
+    const page=await pdf.getPage(i);
+    if(i<=maxPages){
+      const vp1=page.getViewport({scale:1}); const sc=Math.min(2.2,1600/vp1.width); const vp=page.getViewport({scale:sc});
+      const c=document.createElement("canvas"); c.width=Math.round(vp.width); c.height=Math.round(vp.height);
+      const x=c.getContext("2d"); x.fillStyle="#fff"; x.fillRect(0,0,c.width,c.height);
+      await page.render({canvasContext:x, viewport:vp}).promise;
+      images.push(await canvasBlob(c,.85));
+    }
+    try{ const tc=await page.getTextContent(); text+=tc.items.map(it=>it.str).join(" ")+"\n"; }catch(e){}
+  }
+  return {images, text:text.replace(/[ \t]+/g," ").trim()};
+}
+
+function extractPrompt(pdfText, hasImages){
+  const cats=(state.settings.categories||DEFAULT_CATS).join(" | ");
+  return `You read expense bills (receipts, tax invoices, fuel slips, delivery bills) for a monthly expense register kept in the UAE. Today's date is ${todayISO()}.
+${hasImages?"The attached image(s) show the bill (several images = pages of one document).":""}${pdfText?"\nText taken from the PDF is included below.":""}
+
+Reply with ONLY one JSON object in this shape:
+{"bills":[{"date":"YYYY-MM-DD or null","vendor":"shop or company name","billNo":"","trn":"vendor TRN if printed","category":"one of: ${cats}","description":"what was bought, max 10 words","subtotal":number or null,"vat":number or null,"total":number or null,"currency":"3-letter code, default ${base()}","payment":"Cash|Card|Bank transfer|Credit|Unknown","confidence":0.0-1.0,"note":"anything unclear, else empty"}]}
+
+Rules:
+- One object per separate bill. If one photo shows several different receipts, list each. Pages of one invoice are ONE bill.
+- Dates on UAE bills are usually day/month/year (12/03/2026 = 2026-03-12). If no date is readable, use null.
+- total = final amount payable including VAT. vat = VAT amount (5% in UAE) if shown, else null. subtotal = amount before VAT if shown.
+- Numbers as plain JSON numbers without commas or currency symbols.
+- Write every text field in English; transliterate Arabic names.
+- If the document is not a bill or receipt, reply {"bills":[]}.${pdfText?"\n\nPDF text:\n"+pdfText.slice(0,9000):""}`;
+}
+
+async function aiExtract(images, pdfText){
+  if(!sample) { const e=new Error("Automatic reading is not available."); e.code="no_ai"; throw e; }
+  const imgs=state.imgMax?images.slice(0,state.imgMax):[];
+  if(!imgs.length && !pdfText){ const e=new Error("This view can't send images to Claude."); e.code="images_unavailable"; throw e; }
+  const opts={cache:false}; if(imgs.length) opts.images=imgs;
+  const out=await sample.json(extractPrompt(pdfText, imgs.length>0), opts);
+  return Array.isArray(out?.bills)?out.bills:[];
+}
+
+function aiErrText(e){
+  const c=e&&e.code;
+  if(c==="not_granted"||c==="sampling_disabled"||c==="no_ai"||c==="images_unavailable"){ state.aiOK=false; return "Saved. Type the details in"; }
+  if(c==="rate_limited") return "Busy — saved, read it again later";
+  if(c==="refused") return "Couldn't read this bill";
+  return "Saved. Couldn't read it automatically";
+}
+
+function normalize(raw, extra){
+  const cats=state.settings.categories||DEFAULT_CATS;
+  const b={ kind:"bill", id:newId(), createdAt:new Date().toISOString(), source:"ai", ...extra,
+    date: validISO(raw.date)?raw.date:null, vendor:String(raw.vendor||"").slice(0,120), billNo:String(raw.billNo||"").slice(0,60), trn:String(raw.trn||"").slice(0,30),
+    category: cats.find(c=>c.toLowerCase()===String(raw.category||"").toLowerCase())||"Others",
+    description:String(raw.description||"").slice(0,160), subtotal:num(raw.subtotal), vat:num(raw.vat), total:num(raw.total),
+    currency:(String(raw.currency||base()).toUpperCase().replace(/[^A-Z]/g,"").slice(0,3))||base(),
+    payment:["Cash","Card","Bank transfer","Credit","Unknown"].includes(raw.payment)?raw.payment:"Unknown", notes:"" };
+  if(b.total==null && b.subtotal!=null) b.total=Math.round((b.subtotal+(b.vat||0))*100)/100;
+  const reasons=[];
+  if(!b.date) reasons.push("no readable date");
+  if(b.total==null) reasons.push("no readable total");
+  if(typeof raw.confidence==="number" && raw.confidence<0.7) reasons.push("some details were hard to read");
+  if(raw.note) reasons.push(String(raw.note).slice(0,140));
+  const dup=[...state.bills.values()].find(o=>o.total!=null && o.total===b.total && (o.billNo&&o.billNo===b.billNo || (o.vendor&&o.vendor===b.vendor&&o.date===b.date)));
+  if(dup) reasons.push("looks like a duplicate of a bill already saved");
+  b.needsReview=reasons.length>0; b.reviewReason=reasons.length?"Check: "+reasons.join("; ")+".":"";
+  return b;
+}
+
+async function storeCopies(file, isPdf, preview){
+  // returns fields to merge into bill
+  const out={ fileType:isPdf?"pdf":"image" };
+  const thumbBlob=await blobToJpeg(preview,180,.6); out.thumb=await blobToDataURL(thumbBlob);
+  if(state.mode==="cloud" && assets){
+    const p=await assets.upload(preview,{type:"image/jpeg"}); out.previewId=p.id;
+    if(isPdf && file.size<=20*1024*1024){ try{ const f=await assets.upload(file,{type:"application/pdf"}); out.fileId=f.id; }catch(e){} }
+  } else {
+    const small=await blobToJpeg(preview, state.mode==="cloud"?900:1500, state.mode==="cloud"?.55:.7);
+    out.previewData=await blobToDataURL(small);
+  }
+  return out;
+}
+
+async function fileHash(file){ try{ const d=await crypto.subtle.digest("SHA-256", await file.arrayBuffer()); return [...new Uint8Array(d)].slice(0,16).map(x=>x.toString(16).padStart(2,"0")).join(""); }catch(e){ return null; } }
+async function processFile(file, job){
+  const hash=await fileHash(file);
+  if(hash){ const prev=[...state.bills.values()].find(b=>b.fileHash===hash); if(prev){ job.done=true; job.status="Already added — skipped"; return []; } }
+  const isPdf=file.type==="application/pdf"||/\.pdf$/i.test(file.name);
+  job.status=isPdf?"Opening PDF…":"Preparing photo…"; render();
+  let pages=[], pdfText="";
+  if(isPdf){ const r=await renderPdf(file, Math.max(1,Math.min(state.imgMax||3,3))); pages=r.images; pdfText=r.text; }
+  else pages=[await blobToJpeg(file,1800,.85)];
+  if(!pages.length) throw new Error("No pages found");
+  job.status="Reading bill…"; render();
+  const copyP=storeCopies(file,isPdf,pages[0]);
+  let found=null, aiErr=null;
+  try{ found=await aiExtract(pages,pdfText); }catch(e){ aiErr=e; }
+  job.status="Saving…"; render();
+  const extra=await copyP; if(hash) extra.fileHash=hash;
+  let list;
+  if(found && found.length) list=found.map(r=>normalize(r,extra));
+  else { const b=normalize({},{...extra,source:aiErr?"manual":"ai"}); b.needsReview=true; b.reviewReason=aiErr?"Type in the details from the bill.":"This didn't look like a bill. Check it or delete it."; b.date=null; list=[b]; }
+  for(const b of list) await Store.saveBill(b);
+  const first=list[0];
+  if(validISO(first.date)) state.month=first.date.slice(0,7);
+  job.done=true; job.status=aiErr?aiErrText(aiErr):(list.length>1?`${list.length} bills added`:(first.needsReview?"Added — please check":"Added"));
+  return list;
+}
+
+let running=false;
+async function addFiles(files){
+  const arr=[...files].filter(f=>f && f.size>0);
+  if(!arr.length) return;
+  if(state.mode==="loading"){ toast("Still connecting. Try again in a moment."); return; }
+  const jobs=arr.map(f=>({id:newId(),file:f,name:f.name||"Photo",status:"Waiting…"}));
+  state.jobs.push(...jobs); state.view="bills"; render();
+  if(running) return; running=true;
+  const added=[];
+  while(true){
+    const j=state.jobs.find(x=>!x.done&&!x.error&&!x.started); if(!j) break;
+    j.started=true;
+    try{ added.push(...await processFile(j.file,j)); }catch(e){ j.error=true; j.status=(e&&e.message)||"Couldn't add this file"; }
+    render();
+  }
+  running=false;
+  setTimeout(()=>{ state.jobs=state.jobs.filter(j=>j.error); render(); },4000);
+  const toCheck=added.filter(b=>b.needsReview);
+  if(added.length===1 && toCheck.length===1) openBill(state.bills.get(added[0].id)||added[0]);
+  else if(added.length) toast(`${added.length} bill${added.length>1?"s":""} added${toCheck.length?` · ${toCheck.length} to check`:""}`);
+}
+
+async function rereadBill(b){
+  const btn=$("#bReread"); if(btn){ btn.disabled=true; btn.textContent="Reading…"; }
+  try{
+    let pages=[], text="";
+    if(b.fileType==="pdf" && b.fileId){ const blob=await (await fetch("/_blob/"+b.fileId)).blob(); const r=await renderPdf(new File([blob],"bill.pdf",{type:"application/pdf"}),Math.max(1,Math.min(state.imgMax||3,3))); pages=r.images; text=r.text; }
+    else { const src=Store.previewSrc(b); pages=[await (await fetch(src)).blob()]; }
+    const found=await aiExtract(pages,text);
+    if(!found.length){ toast("Claude couldn't find a bill in this copy."); if(btn){btn.disabled=false;btn.textContent="Read again";} return; }
+    const n=normalize(found[0],{});
+    const merged={...b, date:n.date||b.date, vendor:n.vendor||b.vendor, billNo:n.billNo||b.billNo, trn:n.trn||b.trn, category:n.category, description:n.description||b.description,
+      subtotal:n.subtotal??b.subtotal, vat:n.vat??b.vat, total:n.total??b.total, currency:n.currency, payment:n.payment!=="Unknown"?n.payment:b.payment,
+      needsReview:n.needsReview, reviewReason:n.reviewReason};
+    openBill(merged); toast("Details updated — review and save");
+  }catch(e){ toast(aiErrText(e)); if(btn){btn.disabled=false;btn.textContent="Read again";} }
+}
+
+/* ---------- exports ---------- */
+function reportTitle(){ return "Expense Report — "+monthName(state.month); }
+function fileBase(){ return "Expenses_"+state.month+(state.settings.company?"_"+state.settings.company.replace(/[^A-Za-z0-9]+/g,"_"):""); }
+async function offerFile(filename, blob){
+  if(downloads){
+    try{ await downloads.save({filename, data:blob}); toast("Saved "+filename); return; }
+    catch(e){ if(e&&e.code==="declined") return; if(e&&e.code==="rate_limited"){ toast("Another download is waiting. Try again in a moment."); return; } if(!(e&&(e.code==="unavailable"||e.code==="not_granted"||e.code==="capability_disabled"))){ toast("Couldn't save the file: "+(e.message||e.code)); return; } }
+  }
+  try{ const u=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=u; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),30000); }
+  catch(e){ toast("Downloads aren't available in this view."); }
+}
+
+async function exportXlsx(){
+  const btn=$("#xlsxBtn"); btn.disabled=true; btn.textContent="Preparing…";
+  try{
+    await need("xlsx"); const X=window.XLSX;
+    const bills=sortBills(billsOfMonth(state.month),false), T=totals(bills), s=state.settings;
+    const head=["#","Date","Vendor","Bill No.","Vendor TRN","Category","Description","Paid by","Amount before VAT","VAT","Total","Currency","Notes","Status"];
+    const aoa=[[reportTitle()],[ [s.name,s.company].filter(Boolean).join(" · ")||"", "", "", "Generated "+fmtDay(todayISO())],[],head];
+    bills.forEach((b,i)=>{ const sub=b.subtotal!=null?b.subtotal:(b.total!=null?Math.round(((b.total||0)-(b.vat||0))*100)/100:null);
+      aoa.push([i+1, validISO(b.date)?xlDate(b.date):"", b.vendor||"", b.billNo||"", b.trn||"", b.category||"", b.description||"", b.payment||"", sub, b.vat, b.total, cur(b), b.notes||"", b.needsReview?"Check":"OK"]); });
+    const first=5, last=4+bills.length;
+    aoa.push([]);
+    const totRow=aoa.length+1;
+    aoa.push(["","","TOTAL ("+base()+")","","","","","",{t:"n",f:`SUMIF(L${first}:L${last},"${base()}",I${first}:I${last})`,v:T.sub},{t:"n",f:`SUMIF(L${first}:L${last},"${base()}",J${first}:J${last})`,v:T.vat},{t:"n",f:`SUMIF(L${first}:L${last},"${base()}",K${first}:K${last})`,v:T.total},base()]);
+    const ws=X.utils.aoa_to_sheet(aoa,{dateNF:"dd-mmm-yyyy"});
+    for(let r=first;r<=totRow;r++) for(const c of ["I","J","K"]){ const cell=ws[c+r]; if(cell&&cell.t==="n") cell.z="#,##0.00"; }
+    for(let r=first;r<=last;r++){ const c=ws["B"+r]; if(c&&c.t==="n") c.z="dd-mmm-yyyy"; }
+    ws["!cols"]=[{wch:5},{wch:13},{wch:28},{wch:14},{wch:17},{wch:20},{wch:32},{wch:13},{wch:16},{wch:12},{wch:14},{wch:9},{wch:28},{wch:8}];
+    ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:6}}];
+    ws["!autofilter"]={ref:`A4:N${last}`};
+    const wb=X.utils.book_new(); X.utils.book_append_sheet(wb,ws,"Bills");
+    // daily
+    const days=byDay(bills); const da=[["Daily totals — "+monthName(state.month)+" ("+base()+")"],[],["Date","Bills","Amount before VAT","VAT","Total"]];
+    days.forEach(([d,v])=>da.push([xlDate(d),v.n,v.sub,v.vat,v.t]));
+    const dl=3+days.length; da.push(["TOTAL",{t:"n",f:`SUM(B4:B${dl})`,v:T.count},{t:"n",f:`SUM(C4:C${dl})`,v:T.sub},{t:"n",f:`SUM(D4:D${dl})`,v:T.vat},{t:"n",f:`SUM(E4:E${dl})`,v:T.total}]);
+    const wd=X.utils.aoa_to_sheet(da,{dateNF:"dd-mmm-yyyy"});
+    for(let r=4;r<=dl+1;r++){ for(const c of ["C","D","E"]){ const cell=wd[c+r]; if(cell) cell.z="#,##0.00"; } const dc=wd["A"+r]; if(dc&&dc.t==="n") dc.z="dd-mmm-yyyy"; }
+    wd["!cols"]=[{wch:14},{wch:8},{wch:18},{wch:12},{wch:14}];
+    X.utils.book_append_sheet(wb,wd,"Daily totals");
+    // category
+    const cats=byCategory(bills); const ca=[["By category — "+monthName(state.month)+" ("+base()+")"],[],["Category","Bills","Total","Share"]];
+    cats.forEach(([k,v],i)=>ca.push([k,v.n,v.t,{t:"n",f:`C${4+i}/C${4+cats.length}`,v:T.total?v.t/T.total:0,z:"0.0%"}]));
+    const cl=3+cats.length; ca.push(["TOTAL",{t:"n",f:`SUM(B4:B${cl})`,v:T.count},{t:"n",f:`SUM(C4:C${cl})`,v:T.total}]);
+    const wc=X.utils.aoa_to_sheet(ca); for(let r=4;r<=cl+1;r++){ const c=wc["C"+r]; if(c) c.z="#,##0.00"; }
+    wc["!cols"]=[{wch:24},{wch:8},{wch:14},{wch:9}];
+    X.utils.book_append_sheet(wb,wc,"By category");
+    const out=X.write(wb,{bookType:"xlsx",type:"array"});
+    await offerFile(fileBase()+".xlsx", new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+  }catch(e){ toast(e.message||"Couldn't build the Excel file."); }
+  finally{ const b=$("#xlsxBtn"); if(b){ b.disabled=false; b.textContent="Excel (.xlsx)"; } }
+}
+
+async function exportPdf(){
+  const btn=$("#pdfBtn"); btn.disabled=true; btn.textContent="Preparing…";
+  try{
+    await need("jspdf"); const { jsPDF }=window.jspdf;
+    const bills=sortBills(billsOfMonth(state.month),false), T=totals(bills), s=state.settings;
+    const doc=new jsPDF({unit:"pt",format:"a4"}); const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), M=36;
+    const teal=[13,107,92], ink=[22,32,43], grey=[94,106,117];
+    doc.setFillColor(...teal); doc.rect(0,0,W,6,"F");
+    doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(...ink); doc.text("Expense Report",M,44);
+    doc.setFontSize(12); doc.setTextColor(...teal); doc.text(monthName(state.month),M,62);
+    doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.setTextColor(...grey);
+    const who=[s.name,s.company].filter(Boolean).join("  ·  "); if(who) doc.text(who,W-M,44,{align:"right"});
+    doc.text("Generated "+fmtDay(todayISO()),W-M,58,{align:"right"});
+    // summary boxes
+    const boxes=[["Bills",String(T.count)],["Before VAT",base()+" "+money(T.sub)],["VAT",base()+" "+money(T.vat)],["Total",base()+" "+money(T.total)]];
+    const bw=(W-2*M-30)/4; boxes.forEach((bx,i)=>{ const x=M+i*(bw+10), y=78; if(i===3){ doc.setFillColor(...teal); doc.roundedRect(x,y,bw,46,6,6,"F"); doc.setTextColor(255,255,255);} else { doc.setFillColor(238,242,240); doc.roundedRect(x,y,bw,46,6,6,"F"); doc.setTextColor(...grey);} doc.setFontSize(8); doc.text(bx[0].toUpperCase(),x+10,y+16); doc.setFont("helvetica","bold"); doc.setFontSize(12); if(i!==3) doc.setTextColor(...ink); doc.text(bx[1],x+10,y+34); doc.setFont("helvetica","normal"); });
+    let y=140;
+    if(T.others.length){ doc.setFontSize(8.5); doc.setTextColor(...grey); doc.text("Other currencies (not in totals): "+T.others.map(([c,v])=>c+" "+money(v)).join(", "),M,y); y+=12; }
+    const body=bills.map((b,i)=>[i+1, validISO(b.date)?fmtDay(b.date):"—", (b.vendor||"—")+(b.description?"\n"+b.description:""), b.billNo||"", b.category||"", b.payment||"", money(b.subtotal!=null?b.subtotal:(b.total||0)-(b.vat||0)), money(b.vat), (cur(b)!==base()?cur(b)+" ":"")+money(b.total)+(b.needsReview?" *":"")]);
+    doc.autoTable({ startY:y+4, margin:{left:M,right:M}, head:[["#","Date","Vendor / items","Bill no.","Category","Paid by","Before VAT","VAT","Total"]], body,
+      foot:[["","","Total ("+base()+")","","","",money(T.sub),money(T.vat),money(T.total)]],
+      styles:{font:"helvetica",fontSize:8,cellPadding:4,textColor:ink,lineColor:[223,227,223],lineWidth:.5,overflow:"linebreak"},
+      headStyles:{fillColor:teal,textColor:255,fontStyle:"bold"}, footStyles:{fillColor:[225,240,236],textColor:ink,fontStyle:"bold"},
+      alternateRowStyles:{fillColor:[247,248,246]},
+      columnStyles:{0:{cellWidth:20},1:{cellWidth:56},2:{cellWidth:"auto"},3:{cellWidth:52},4:{cellWidth:64},5:{cellWidth:44},6:{halign:"right",cellWidth:56},7:{halign:"right",cellWidth:44},8:{halign:"right",cellWidth:62}}
+    });
+    if(bills.some(b=>b.needsReview)){ doc.setFontSize(8); doc.setTextColor(...grey); doc.text("* marked for checking",M,doc.lastAutoTable.finalY+12); }
+    // daily + category
+    const days=byDay(bills), cats=byCategory(bills);
+    doc.autoTable({ startY:doc.lastAutoTable.finalY+26, margin:{left:M,right:M}, head:[["Category","Bills","Total ("+base()+")","Share"]], body:cats.map(([k,v])=>[k,v.n,money(v.t),(T.total?(v.t/T.total*100).toFixed(1):"0.0")+"%"]),
+      styles:{fontSize:8.5,cellPadding:4,textColor:ink}, headStyles:{fillColor:ink,textColor:255}, columnStyles:{1:{halign:"right"},2:{halign:"right"},3:{halign:"right"}}, theme:"grid" });
+    doc.autoTable({ startY:doc.lastAutoTable.finalY+20, margin:{left:M,right:M}, head:[["Date","Bills","Before VAT","VAT","Total ("+base()+")"]], body:days.map(([d,v])=>[fmtDay(d),v.n,money(v.sub),money(v.vat),money(v.t)]),
+      foot:[["Total",T.count,money(T.sub),money(T.vat),money(T.total)]],
+      styles:{fontSize:8.5,cellPadding:4,textColor:ink}, headStyles:{fillColor:ink,textColor:255}, footStyles:{fillColor:[225,240,236],textColor:ink,fontStyle:"bold"}, columnStyles:{1:{halign:"right"},2:{halign:"right"},3:{halign:"right"},4:{halign:"right"}}, theme:"grid" });
+    // bill copies
+    const attach=$("#attachCopies")?.checked;
+    if(attach){
+      const withCopy=bills.filter(b=>Store.previewSrc(b));
+      for(let i=0;i<withCopy.length;i++){
+        const b=withCopy[i]; btn.textContent=`Adding copies ${i+1}/${withCopy.length}…`;
+        try{
+          const blob=await (await fetch(Store.previewSrc(b))).blob();
+          const jpg=await blobToJpeg(blob,1400,.75); const url=await blobToDataURL(jpg); const im=await loadImg(url);
+          doc.addPage(); doc.setFillColor(...teal); doc.rect(0,0,W,6,"F");
+          doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(...ink);
+          doc.text(`Bill ${bills.indexOf(b)+1} · ${b.vendor||"Bill"}`,M,34);
+          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...grey);
+          doc.text(`${validISO(b.date)?fmtDay(b.date):"No date"}  ·  ${b.billNo?"No. "+b.billNo+"  ·  ":""}${cur(b)} ${money(b.total)}`,M,50);
+          const mw=W-2*M, mh=H-M-80; const r=Math.min(mw/im.naturalWidth, mh/im.naturalHeight);
+          const iw=im.naturalWidth*r, ih=im.naturalHeight*r;
+          doc.addImage(url,"JPEG",M+(mw-iw)/2,64,iw,ih);
+        }catch(e){ /* skip copy that won't load */ }
+      }
+    }
+    // page numbers fix on appended pages
+    const n=doc.internal.getNumberOfPages();
+    for(let p=1;p<=n;p++){ doc.setPage(p); doc.setFillColor(255,255,255); doc.rect(0,H-30,W,30,"F"); doc.setFontSize(8); doc.setTextColor(...grey); doc.text(`${reportTitle()}  ·  page ${p} of ${n}`,W/2,H-16,{align:"center"}); }
+    await offerFile(fileBase()+".pdf", doc.output("blob"));
+  }catch(e){ toast(e.message||"Couldn't build the PDF."); }
+  finally{ const b=$("#pdfBtn"); if(b){ b.disabled=false; b.textContent="PDF"; } }
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button,[data-open-add]"); if(!t) return;
+  if(t.dataset.view){ state.view=t.dataset.view; render(); window.scrollTo(0,0); return; }
+  if(t.dataset.bill){ const b=state.bills.get(t.dataset.bill); if(b) openBill(b); return; }
+  if(t.dataset.dismiss){ state.jobs=state.jobs.filter(j=>j.id!==t.dataset.dismiss); render(); return; }
+  if(t.hasAttribute("data-open-add")||t.id==="fab"){ openAdd(); return; }
+  if(t.id==="prevM"){ state.month=shiftMonth(state.month,-1); render(); return; }
+  if(t.id==="nextM"){ state.month=shiftMonth(state.month,1); render(); return; }
+  if(t.id==="sortBtn"){ const s={...state.settings,newestFirst:state.settings.newestFirst===false}; Store.saveSettings(s).catch(()=>{}); state.settings=s; render(); return; }
+  if(t.id==="xlsxBtn"){ exportXlsx(); return; }
+  if(t.id==="copyLink"){ const v=$("#appLink").value; navigator.clipboard.writeText(v).then(()=>toast("Link copied")).catch(()=>{ const i=$("#appLink"); i.focus(); i.select(); toast("Select the link and copy it"); }); return; }
+  if(t.id==="pdfBtn"){ exportPdf(); return; }
+  if(t.id==="saveSettings"){
+    const cats=$("#sCats").value.split("\n").map(x=>x.trim()).filter(Boolean);
+    if(!cats.includes("Others")) cats.push("Others");
+    const s={...state.settings,name:$("#sName").value.trim(),company:$("#sCompany").value.trim(),currency:($("#sCur").value.trim()||"AED").toUpperCase().slice(0,3),categories:cats};
+    Store.saveSettings(s).then(()=>toast("Settings saved")).catch(err=>toast(dbMsg(err))); return;
+  }
+});
+document.addEventListener("input",e=>{ if(e.target.id==="search"){ state.query=e.target.value; const pos=e.target.selectionStart; render(); const s=$("#search"); s.focus(); try{s.setSelectionRange(pos,pos);}catch(_){} } });
+document.addEventListener("change",e=>{
+  if(e.target.id==="attachCopies"){ const s={...state.settings,attachCopies:e.target.checked}; state.settings=s; Store.saveSettings(s).catch(()=>{}); }
+  if(e.target.id==="monthPick" && e.target.value){ state.month=e.target.value; render(); }
+});
+$("#fileCam").addEventListener("change",e=>{ addFiles(e.target.files); e.target.value=""; });
+$("#fileAny").addEventListener("change",e=>{ addFiles(e.target.files); e.target.value=""; });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("#overlay")) closeModal(); });
+// drag & drop (iPad / desktop)
+let dragDepth=0;
+document.addEventListener("dragenter",e=>{ if(e.dataTransfer?.types?.includes("Files")){ dragDepth++; $("#app").classList.add("drop"); } });
+document.addEventListener("dragleave",()=>{ dragDepth=Math.max(0,dragDepth-1); if(!dragDepth) $("#app").classList.remove("drop"); });
+document.addEventListener("dragover",e=>{ if(e.dataTransfer?.types?.includes("Files")) e.preventDefault(); });
+document.addEventListener("drop",e=>{ if(e.dataTransfer?.files?.length){ e.preventDefault(); dragDepth=0; $("#app").classList.remove("drop"); addFiles(e.dataTransfer.files); } });
+
+// paste a copied bill (image or PDF) anywhere in the app
+document.addEventListener("paste",e=>{
+  const cd=e.clipboardData; if(!cd) return;
+  const files=[];
+  for(const it of cd.items||[]){ if(it.kind==="file"){ const f=it.getAsFile(); if(f && (/^image\//.test(f.type)||f.type==="application/pdf")) files.push(f); } }
+  if(!files.length && cd.files) for(const f of cd.files) if(/^image\//.test(f.type)||f.type==="application/pdf") files.push(f);
+  const inForm=e.target.closest && e.target.closest("input,textarea") && !files.length;
+  if(inForm) return;
+  e.preventDefault();
+  if(!files.length){ toast("Nothing to paste. Copy the bill image first."); return; }
+  const named=files.map((f,i)=>new File([f], f.name && f.name!=="image.png" ? f.name : `Pasted bill ${new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}${files.length>1?" ("+(i+1)+")":""}.${f.type==="application/pdf"?"pdf":(f.type.split("/")[1]||"png")}`, {type:f.type}));
+  closeModal(); addFiles(named);
+});
+function onHash(){ const h=location.hash.replace("#",""); if(h==="add"){ state.view="bills"; render(); setTimeout(openAdd,300); } else if(h==="share-setup"){ state.view="settings"; render(); setTimeout(()=>document.getElementById("share-setup")?.scrollIntoView(),100); } }
+window.addEventListener("hashchange",onHash);
+boot().then(onHash);
+</script>
+</body>
+</html>
